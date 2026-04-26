@@ -1,0 +1,21 @@
+{
+  "name": "fx-currency-api",
+  "version": "1.0.0",
+  "description": "Real-time fiat exchange rates for 160+ currencies via x402 micropayments",
+  "type": "module",
+  "main": "api/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node api/index.js",
+    "start": "node api/index.js"
+  },
+  "dependencies": {
+    "@coinbase/x402": "^2.1.0",
+    "@x402/core": "^2.10.0",
+    "@x402/evm": "^2.10.0",
+    "@x402/express": "^2.10.0",
+    "express": "^4.21.2"
+  }
+}
