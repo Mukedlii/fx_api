@@ -67,15 +67,20 @@ async function frankfurterFetch(path) {
 app.get("/rates", async (req, res) => {
   try {
     const base = (req.query.base || "USD").toUpperCase();
-    const symbols = req.query.symbols || "";
-    let url = `/rates?from=${encodeURIComponent(base)}`;
-    if (symbols) url += `&symbols=${encodeURIComponent(symbols.toUpperCase())}`;
-    const data = await frankfurterFetch(url);
+    const symbols = (req.query.symbols || req.query.quotes || "").toUpperCase();
+    let url = `/rates?base=${encodeURIComponent(base)}`;
+    if (symbols) url += `&quotes=${encodeURIComponent(symbols)}`;
+    const raw = await frankfurterFetch(url);
+    // v2 returns array of objects [{date, base, quote, rate}]
+    const arr = Array.isArray(raw) ? raw : [raw];
+    const rates = {};
+    arr.forEach(item => { if (item.quote) rates[item.quote] = item.rate; });
+    const date = arr[0]?.date || new Date().toISOString().slice(0, 10);
     res.json({
-      base: data.base,
-      date: data.date,
-      rates: data.rates,
-      count: Object.keys(data.rates || {}).length,
+      base,
+      date,
+      rates,
+      count: Object.keys(rates).length,
       timestamp: new Date().toISOString(),
       _paid: "$0.001 USDC / Base mainnet",
     });
@@ -91,20 +96,20 @@ app.get("/convert", async (req, res) => {
     const to = (req.query.to || "EUR").toUpperCase();
     const amount = parseFloat(req.query.amount) || 1;
 
-    const data = await frankfurterFetch(
-      `/rates?from=${encodeURIComponent(from)}&symbols=${encodeURIComponent(to)}`
+    const raw = await frankfurterFetch(
+      `/rates?base=${encodeURIComponent(from)}&quotes=${encodeURIComponent(to)}`
     );
-
-    const rate = data.rates?.[to];
-    if (!rate) return res.status(400).json({ error: `Currency ${to} not found` });
+    const arr = Array.isArray(raw) ? raw : [raw];
+    const item = arr.find(i => i.quote === to);
+    if (!item) return res.status(400).json({ error: `Currency ${to} not found` });
 
     res.json({
       from,
       to,
       amount,
-      rate,
-      result: parseFloat((amount * rate).toFixed(6)),
-      date: data.date,
+      rate: item.rate,
+      result: parseFloat((amount * item.rate).toFixed(6)),
+      date: item.date,
       timestamp: new Date().toISOString(),
       _paid: "$0.001 USDC / Base mainnet",
     });
@@ -117,21 +122,24 @@ app.get("/convert", async (req, res) => {
 app.get("/historical", async (req, res) => {
   try {
     const date = req.query.date;
-    const from = req.query.from || req.query.base || "USD";
-    const to = (req.query.to || "").toUpperCase();
-    const symbols = req.query.symbols || to;
+    const base = (req.query.base || req.query.from || "USD").toUpperCase();
+    const symbols = (req.query.symbols || req.query.quotes || req.query.to || "").toUpperCase();
 
     if (!date) return res.status(400).json({ error: "date param required (YYYY-MM-DD)" });
 
-    let url = `/rates?from=${encodeURIComponent(date)}&base=${encodeURIComponent(from.toUpperCase())}`;
-    if (symbols) url += `&symbols=${encodeURIComponent(symbols.toUpperCase())}`;
+    let url = `/rates?date=${encodeURIComponent(date)}&base=${encodeURIComponent(base)}`;
+    if (symbols) url += `&quotes=${encodeURIComponent(symbols)}`;
 
-    const data = await frankfurterFetch(url);
+    const raw = await frankfurterFetch(url);
+    const arr = Array.isArray(raw) ? raw : [raw];
+    const rates = {};
+    arr.forEach(item => { if (item.quote) rates[item.quote] = item.rate; });
+
     res.json({
-      base: data.base,
-      date: data.date,
-      rates: data.rates,
-      count: Object.keys(data.rates || {}).length,
+      base,
+      date: arr[0]?.date || date,
+      rates,
+      count: Object.keys(rates).length,
       _paid: "$0.002 USDC / Base mainnet",
     });
   } catch (err) {
@@ -143,9 +151,13 @@ app.get("/historical", async (req, res) => {
 app.get("/currencies", async (req, res) => {
   try {
     const data = await frankfurterFetch("/currencies");
+    // v2 returns array of currency objects
+    const arr = Array.isArray(data) ? data : [];
+    const currencies = {};
+    arr.forEach(c => { if (c.iso_code) currencies[c.iso_code] = c.name; });
     res.json({
-      currencies: data,
-      count: Object.keys(data || {}).length,
+      currencies,
+      count: arr.length,
       timestamp: new Date().toISOString(),
       _paid: "$0.0005 USDC / Base mainnet",
     });
